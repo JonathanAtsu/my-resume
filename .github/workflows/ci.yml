@@ -2,117 +2,54 @@ name: GeoLocation CI Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main , jj]
   pull_request:
     branches: [ main ]
 
-env:
-  APP_NAME: geolocation-service
-  AWS_REGION: us-east-1
-  ECR_REPO: your-aws-account-id.dkr.ecr.us-east-1.amazonaws.com/geolocation-service
-  JFROG_REPO: libs-release-local  # or your Artifactory repo key
-
 jobs:
-  build-sonar-docker-deploy:
+  run-pytests:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install -r requirements.txt
+
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          path: my-resume-app.py/
+          name: test-results
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: run-pytests
 
     steps:
-      # 1) Checkout
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      # 2) Set up JDK
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
-
-      # 3) Maven Build & Test
-      - name: Build with Maven
-        run: mvn -B clean verify
-
-      # 4) SonarQube Analysis
-      # Requires SONAR_TOKEN secret and SONAR_HOST_URL as env or secret
-      - name: SonarQube Scan
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} # e.g. https://sonar.yourdomain.com
-        run: |
-          mvn sonar:sonar \
-            -Dsonar.projectKey=${{ env.APP_NAME }} \
-            -Dsonar.host.url=$SONAR_HOST_URL \
-            -Dsonar.login=$SONAR_TOKEN
-
-      # 5) Package JAR (optional if not done already)
-      - name: Package JAR
-        run: mvn -B package -DskipTests
-
-      # 6) Install JFrog CLI
-      - name: Install JFrog CLI
-        run: |
-          curl -fL https://getcli.jfrog.io | sh
-          sudo mv jfrog /usr/local/bin/jf
-
-      # 7) Configure JFrog
-      - name: Configure JFrog
-        env:
-          JF_URL: ${{ secrets.JF_URL }}            # e.g. https://yourcompany.jfrog.io
-          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
-        run: |
-          jf config add artifactory-server \
-            --url="$JF_URL" \
-            --access-token="$JF_ACCESS_TOKEN" \
-            --interactive=false
-
-      # 8) Upload JAR artifact to Artifactory
-      - name: Upload JAR to Artifactory
-        run: |
-          # Adjust target path to match your repo structure
-          jf rt u "target/*.jar" "${{ env.JFROG_REPO }}/${{ env.APP_NAME }}/builds/${{ github.run_number }}/"
-
-      # 9) Log in to AWS ECR
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # 10) Build Docker image
       - name: Build Docker image
         run: |
-          docker build -t $ECR_REPO:latest .
+          docker build -t resume:latest .
+          # docker run aquasec/trivy image python:3.4-alpine
+          # docker run aquasec/trivy sbom alpine:3.15
 
-      # 11) Scan Docker image with Trivy
-      - name: Scan Docker image with Trivy
-        uses: aquasecurity/trivy-action@0.22.0
+      - name: Download artifact
+        uses: actions/download-artifact@v4
         with:
-          image-ref: ${{ env.ECR_REPO }}:latest
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-
-      # 12) Push Docker image to ECR (only if Trivy passed)
-      - name: Push Docker image to ECR
-        run: |
-          docker push $ECR_REPO:latest
-
-      # 13) Deploy to Kubernetes with Helm (only on main branch pushes)
-      - name: Set up kubectl & deploy with Helm
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        env:
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }} # base64 kubeconfig
-        run: |
-          echo "$KUBE_CONFIG_DATA" | base64 -d > $HOME/.kube/config
-          helm upgrade --install $APP_NAME ./helm/$APP_NAME \
-            --set image.repository=$ECR_REPO \
-            --set image.tag=latest \
-            --namespace geolocation --create-namespace
-
+          path: my-resume-app.py/
+          name: test-results
+      - name: List downloaded files
+        run: ls -R my-resume-app.py/
+  
