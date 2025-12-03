@@ -2,7 +2,7 @@ name: GeoLocation CI Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main , jj]
   pull_request:
     branches: [ main ]
 
