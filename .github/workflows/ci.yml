@@ -51,4 +51,6 @@ jobs:
         with:
           path: my-resume-app.py/
           name: test-results
+      - name: List downloaded files
+        run: ls -R my-resume-app.py/
   
