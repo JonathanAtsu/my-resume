@@ -42,8 +42,8 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -t resume:latest .
-          docker run aquasec/trivy image python:3.4-alpine
-          docker run aquasec/trivy sbom alpine:3.15
+          # docker run aquasec/trivy image python:3.4-alpine
+          # docker run aquasec/trivy sbom alpine:3.15
 
       - name: Download artifact
         uses: actions/download-artifact@v4
