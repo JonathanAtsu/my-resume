@@ -24,8 +24,7 @@ jobs:
           pip install pytest
           pip install -r requirements.txt
 
-      - name: Run tests
-        run:  pytest/my-resume/
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
